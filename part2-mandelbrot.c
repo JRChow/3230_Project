@@ -31,58 +31,44 @@ void Pthread_create(pthread_t            *thread,
                     void *(*start_routine)(
                       void *),
                     void *arg) {
-  int err = pthread_create(thread, attr, start_routine, arg);
+  int rc = pthread_create(thread, attr, start_routine, arg);
 
-  if (err != 0) {
-    fprintf(stderr, "Cannot create thread!\n");
-    exit(1);
-  }
+  assert(rc == 0);
 }
 
 // A wrapper function for joining threads.
 void Pthread_join(pthread_t thread, void **retval) {
-  int err = pthread_join(thread, retval);
+  int rc = pthread_join(thread, retval);
 
-  if (err != 0) {
-    fprintf(stderr, "Cannot join thread!\n");
-    exit(1);
-  }
+  assert(rc == 0);
 }
 
 // A wrapper function for locking the mutex lock.
 void Pthread_mutex_lock(pthread_mutex_t *mutex) {
-  int err = pthread_mutex_lock(mutex);
+  int rc = pthread_mutex_lock(mutex);
 
-  if (err != 0) {
-    fprintf(stderr, "Locking failure!\n");
-  }
+  assert(rc == 0);
 }
 
 // A wrapper function for unlocking the mutex lock.
 void Pthread_mutex_unlock(pthread_mutex_t *mutex) {
-  int err = pthread_mutex_unlock(mutex);
+  int rc = pthread_mutex_unlock(mutex);
 
-  if (err != 0) {
-    fprintf(stderr, "Unlocking failure!\n");
-  }
+  assert(rc == 0);
 }
 
 // A wrapper for waiting a conditional variable.
 void Pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex) {
-  int err = pthread_cond_wait(cond, mutex);
+  int rc = pthread_cond_wait(cond, mutex);
 
-  if (err != 0) {
-    fprintf(stderr, "Conditional wait failed!\n");
-  }
+  assert(rc == 0);
 }
 
 // A wrapper for signaling on condition.
 void Pthread_cond_signal(pthread_cond_t *cond) {
-  int err = pthread_cond_signal(cond);
+  int rc = pthread_cond_signal(cond);
 
-  if (err != 0) {
-    fprintf(stderr, "Conditional signal failed!\n");
-  }
+  assert(rc == 0);
 }
 
 // -----------------------------------------------------------------------------
@@ -102,18 +88,6 @@ void processTask(TASK *tsk) {
 
   // Process task row by row.
   // TODO
-}
-
-// The work of a worker.
-void* work(void *arg) {
-  fprintf(stderr, "working!\n");
-
-  // while (1) {                            // TODO: While not terminated
-  // Pthread_mutex_lock(&poolLock);
-  //
-  // while (taskCount == 0)               // While task pool is empty
-  //   pthread_cond_wait(&fill, &mutex);  // Wait until it becomes filled.
-  // }
 }
 
 // Create a task depending on nextTaskRow. nextTaskRow is updated.
@@ -201,6 +175,23 @@ TASK* getTask(TASK *taskPool[], int bufCount, int *taskCount, int *useInd) {
   return temp;
 }
 
+// The work of a worker.
+void* work(void *arg) {
+  fprintf(stderr, "working!\n");
+
+  // while (1) {                            // TODO: While not terminated
+  Pthread_mutex_lock(&poolLock);
+
+  while (taskCount == 0) {            // While task pool is empty
+    pthread_cond_wait(&fill, &mutex); // Wait until it becomes filled.
+  }
+  TASK *task = getTask(taskPool, bufCount, &taskCount, &useInd);
+  Pthread_cond_signal(&empty);
+  Pthread_mutex_unlock(&poolLock);
+
+  // }
+}
+
 // Main function
 int main(int argc, char *args[])
 {
@@ -282,7 +273,7 @@ int main(int argc, char *args[])
 
   // Inform all workers that no more tasks will be assigned.
   // And the workers should terminate after finishing all pending tasks.
-
+  // TODO
 
   // ---------------------------------------------------------------------
 
