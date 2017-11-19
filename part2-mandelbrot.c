@@ -133,12 +133,12 @@ void processTask(TASK *tsk) {
 void* work(void *arg) {
   fprintf(stderr, "working!\n");
 
-  while (1) {                            // TODO: While not terminated
-    // Pthread_mutex_lock(&poolLock);
-    // 
-    // while (taskCount == 0)               // While task pool is empty
-    //   pthread_cond_wait(&fill, &mutex);  // Wait until it becomes filled.
-  }
+  // while (1) {                            // TODO: While not terminated
+  // Pthread_mutex_lock(&poolLock);
+  //
+  // while (taskCount == 0)               // While task pool is empty
+  //   pthread_cond_wait(&fill, &mutex);  // Wait until it becomes filled.
+  // }
 }
 
 // Create a task depending on nextTaskRow. nextTaskRow is updated.
