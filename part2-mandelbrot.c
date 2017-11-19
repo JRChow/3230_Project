@@ -25,6 +25,28 @@
 
 // -----------------------------------------------------------------------------
 
+// Structure of a task.
+typedef struct task {
+  int start_row;   // Start at which row.
+  int num_of_rows; // How many rows.
+} TASK;
+
+// -----------------------------------------------------------------------------
+
+// The task pool.
+TASK *taskPool;
+int   buffCount;   // Third arg (number of buffers in the pool).
+
+int fillInd   = 0; // Pointer for filling the task pool.
+int useInd    = 0; // Pointer for using the task pool.
+int taskCount = 0; // How many tasks are actually in the pool?
+
+// Lock for the task pool.
+pthread_mutex_t poolLock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t  empty, fill; // CV for empty and full.
+
+// -----------------------------------------------------------------------------
+
 // A wrapper function for creating threads.
 void Pthread_create(pthread_t            *thread,
                     const pthread_attr_t *attr,
@@ -73,11 +95,6 @@ void Pthread_cond_signal(pthread_cond_t *cond) {
 
 // -----------------------------------------------------------------------------
 
-// Structure of a task.
-typedef struct task {
-  int start_row;   // Start at which row.
-  int num_of_rows; // How many rows.
-} TASK;
 
 // Process a task.
 void processTask(TASK *tsk) {
@@ -109,7 +126,7 @@ void readArgs(int   argc,
               char *args[],
               int  *workerCount,
               int  *rowPerTask,
-              int  *bufCount)
+              int  *buffCount)
 {
   // Validate the number of arguments
   if (argc != 4)
@@ -135,7 +152,7 @@ void readArgs(int   argc,
   }
 
   // Validate and obtain the number of rows in a task.
-  if (sscanf(args[3], "%i", bufCount) != 1) {
+  if (sscanf(args[3], "%i", buffCount) != 1) {
     fprintf(stderr, "Buffer count is NOT an integer!\n");
     exit(1);
   }
@@ -145,8 +162,8 @@ void readArgs(int   argc,
   assert(*workerCount <= 16);
   assert(*rowPerTask >= 1);
   assert(*rowPerTask <= 50);
-  assert(*bufCount >= 1);
-  assert(*bufCount <= 10);
+  assert(*buffCount >= 1);
+  assert(*buffCount <= 10);
 }
 
 // Returns 1 if still have tasks. 0 if no task left.
@@ -155,37 +172,38 @@ int hasTask(int nextTaskRow) {
 }
 
 // Put newTask into the task pool.
-void putTask(TASK *newTask,
-             TASK *taskPool[],
-             int   bufCount,
-             int  *taskCount,
-             int  *fillInd) {
+void putTask(TASK *newTask) {
   assert(newTask != NULL);
-  taskPool[*fillInd] = newTask;
-  *fillInd           = (*fillInd + 1) % bufCount;
-  (*taskCount)++;
+  taskPool[fillInd] = *newTask;
+  fillInd           = (fillInd + 1) % buffCount;
+  taskCount++;
 }
 
 // Get task from the task pool.
-TASK* getTask(TASK *taskPool[], int bufCount, int *taskCount, int *useInd) {
-  TASK *temp = taskPool[*useInd];
+TASK getTask() {
+  TASK temp = taskPool[useInd];
 
-  *useInd = (*useInd + 1) % bufCount;
-  (*taskCount)--;
+  useInd = (useInd + 1) % buffCount;
+  taskCount--;
   return temp;
 }
 
+// // Context data for a worker thread.
+// typedef struct __context_t {
+// } context_t;
+
 // The work of a worker.
 void* work(void *arg) {
+  // ********************* Consumer *********************
   fprintf(stderr, "working!\n");
 
   // while (1) {                            // TODO: While not terminated
   Pthread_mutex_lock(&poolLock);
 
-  while (taskCount == 0) {            // While task pool is empty
-    pthread_cond_wait(&fill, &mutex); // Wait until it becomes filled.
+  while (taskCount == 0) {               // While task pool is empty
+    pthread_cond_wait(&fill, &poolLock); // Wait until it becomes filled.
   }
-  TASK *task = getTask(taskPool, bufCount, &taskCount, &useInd);
+  TASK task = getTask();
   Pthread_cond_signal(&empty);
   Pthread_mutex_unlock(&poolLock);
 
@@ -201,20 +219,20 @@ int main(int argc, char *args[])
   // Get process start time.
   // clock_gettime(CLOCK_MONOTONIC, &proc_start_time);
 
-  // First input argument (number of worker processes to be created).
-  int workerCount = 0;
+  // First arg (number of worker processes to be created).
+  int workerCount;
 
-  // Second input argument (number of rows in a task).
+  // Second arg (number of rows in a task).
   int rowPerTask;
-
-  // Third input argument (number of buffers).
-  int bufCount;
 
   // The start row of the next task.
   int nextTaskRow = 0;
 
   // Read input arguments.
-  readArgs(argc, args, &workerCount, &rowPerTask, &bufCount);
+  readArgs(argc, args, &workerCount, &rowPerTask, &buffCount);
+
+  // Create the task pool.
+  taskPool = malloc(buffCount * sizeof(TASK));
 
   // Store the 2D image as a linear array of pixels (in row-major format).
   float *pixels = (float *)malloc(sizeof(float) * IMAGE_WIDTH * IMAGE_HEIGHT);
@@ -227,42 +245,24 @@ int main(int argc, char *args[])
   // An array of worker threads.
   pthread_t workers[workerCount];
 
-  // Create task pool.
-  TASK *taskPool[bufCount];
-
-  int fillInd   = 0; // Pointer for filling the task pool.
-  int useInd    = 0; // Pointer for using the task pool.
-  int taskCount = 0; // How many tasks are there in the pool?
-
-  // Lock for the task pool.
-  pthread_mutex_t poolLock = PTHREAD_MUTEX_INITIALIZER;
-
-  // TODO: An array of return values;
-
-  pthread_cond_t empty, fill; // CV for empty and full.
-
   // Create worker threads.
   for (int i = 0; i < workerCount; i++) {
     Pthread_create(&(workers[i]), NULL, &work, NULL);
   }
 
   // ---------------------------------------------------------------------
-  // Producer
+  // **************************** Producer ****************************
 
   while (hasTask(nextTaskRow)) {
     Pthread_mutex_lock(&poolLock); // Lock the pool.
 
     // While task pool is full
-    while (taskCount == bufCount) {
+    while (taskCount == buffCount) {
       Pthread_cond_wait(&empty, &poolLock); // Wait until it's not full
     }
 
     // Create and put a task in the next unused buffer.
-    putTask(createTask(&nextTaskRow, rowPerTask),
-            taskPool,
-            bufCount,
-            &taskCount,
-            &fillInd);
+    putTask(createTask(&nextTaskRow, rowPerTask));
 
     // Signal any waiting worker that a new task has arrived.
     Pthread_cond_signal(&fill);
