@@ -46,8 +46,6 @@ int useInd  = 0;  // Pointer for using the task pool.
 pthread_mutex_t poolLock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  empty    = PTHREAD_COND_INITIALIZER; // FIXME CV for empty.
 pthread_cond_t  fill     = PTHREAD_COND_INITIALIZER; // FIXME CV for fill.
-sem_t taskCount;                                     // How many tasks are
-                                                     // actually in the pool?
 
 int canFinish = 0;
 
@@ -208,10 +206,9 @@ void putTask(TASK *newTask) {
   assert(newTask != NULL);
   taskPool[fillInd] = newTask;
   fillInd           = (fillInd + 1) % buffCount;
-  sem_post(&taskCount); // Increase task count by one.
-
+  taskCount++;
   // fprintf(stderr,
-  //         "put task [%d, %d]\n",
+  //         "put task [%d, %d]",
   //         newTask->start_row,
   //         newTask->start_row + newTask->num_of_rows);
 }
@@ -234,17 +231,17 @@ void* work(void *arg) {
   // **************************** Consumer ****************************
   // fprintf(stderr, "start working!\n");
 
-  while (1) {                              // TODO: While not terminated
+  while (1) { // TODO: While not terminated
     // fprintf(stderr, "new iter!\n");
-    Pthread_mutex_lock(&poolLock);         // # Lock the pool.
-    int iTaskCount = sem_getvalue(&taskCount, &iTaskCount);
+    Pthread_mutex_lock(&poolLock); // ### Lock the pool ###.
 
-    while (iTaskCount == 0) {               // While task pool is empty
+    while (taskCount == 0) {               // While task pool is empty
+      if (canFinish) return 0;
       pthread_cond_wait(&fill, &poolLock); // Wait until it becomes filled.
     }
     TASK *task = getTask();                // Get task from the pool.
     Pthread_cond_signal(&empty);           // A new buffer is available.
-    Pthread_mutex_unlock(&poolLock);       // # Unlock the pool.
+    Pthread_mutex_unlock(&poolLock);       // ### Unlock the pool ###
     float *result = processTask(task);     // Process task.
     // TODO: display computation time.
     // TODO: maybe add a mutex lock?
@@ -252,6 +249,7 @@ void* work(void *arg) {
     //         "finish task [%d, %d]\n",
     //         task->start_row,
     //         task->start_row + task->num_of_rows);
+<<<<<<< HEAD
     // Write result to pixels.
     writeResult(result, task->start_row, task->num_of_rows);
 
@@ -259,6 +257,12 @@ void* work(void *arg) {
   }
   fprintf(stderr, "Finish all!\n");
   return 0; // FIXME
+=======
+    writeResult(result, task->start_row, task->num_of_rows);
+  }
+  // fprintf(stderr, "Finish all!\n");
+  return 0;              // FIXME
+>>>>>>> c1bb74c
 }
 
 // Main function
@@ -293,8 +297,11 @@ int main(int argc, char *args[])
     exit(1);
   }
 
+<<<<<<< HEAD
   sem_init(&taskCount, 0, 0); // No task assigned yet.
 
+=======
+>>>>>>> c1bb74c
   // An array of worker threads.
   pthread_t workers[workerCount];
 
@@ -319,9 +326,12 @@ int main(int argc, char *args[])
     // Create and put a task in the next unused buffer.
     putTask(createTask(&nextTaskRow, rowPerTask));
 
+<<<<<<< HEAD
     // Assigned one new task.
     sem_post(&taskCount);
 
+=======
+>>>>>>> c1bb74c
     // Signal any waiting worker that a new task has arrived.
     Pthread_cond_signal(&fill);
 
@@ -332,9 +342,12 @@ int main(int argc, char *args[])
   // And the workers should terminate after finishing all pending tasks.
   fprintf(stderr, "No more new tasks!\n");
   canFinish = 1;
+<<<<<<< HEAD
   // for (int i = 0; i < workerCount; i++) {
   //   sem_post(&taskCount);
   // }
+=======
+>>>>>>> c1bb74c
 
   // ---------------------------------------------------------------------
 
