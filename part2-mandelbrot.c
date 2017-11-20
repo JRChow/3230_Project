@@ -47,7 +47,6 @@ int taskCount = 0; // How many tasks are actually in the pool?
 pthread_mutex_t poolLock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  empty    = PTHREAD_COND_INITIALIZER; // FIXME CV for empty.
 pthread_cond_t  fill     = PTHREAD_COND_INITIALIZER; // FIXME CV for fill.
-sem_t task_sem;
 
 int canFinish = 0;
 
@@ -202,10 +201,10 @@ void putTask(TASK *newTask) {
   taskPool[fillInd] = newTask;
   fillInd           = (fillInd + 1) % buffCount;
   taskCount++;
-  fprintf(stderr,
-          "put task [%d, %d]",
-          newTask->start_row,
-          newTask->start_row + newTask->num_of_rows);
+  // fprintf(stderr,
+  //         "put task [%d, %d]",
+  //         newTask->start_row,
+  //         newTask->start_row + newTask->num_of_rows);
 }
 
 // Get task from the task pool.
@@ -220,29 +219,29 @@ TASK* getTask() {
 // The work of a worker.
 void* work(void *arg) {
   // **************************** Consumer ****************************
-  fprintf(stderr, "start working!\n");
+  // fprintf(stderr, "start working!\n");
 
-  while (!canFinish) { // TODO: While not terminated
-    fprintf(stderr, "new iter!\n");
-    Pthread_mutex_lock(&poolLock);
+  while (1) { // TODO: While not terminated
+    // fprintf(stderr, "new iter!\n");
+    Pthread_mutex_lock(&poolLock); // ### Lock the pool ###.
 
     while (taskCount == 0) {               // While task pool is empty
+      if (canFinish) return 0;
       pthread_cond_wait(&fill, &poolLock); // Wait until it becomes filled.
     }
     TASK *task = getTask();                // Get task from the pool.
     Pthread_cond_signal(&empty);           // A new buffer is available.
-    Pthread_mutex_unlock(&poolLock);       // Unlock the pool.
+    Pthread_mutex_unlock(&poolLock);       // ### Unlock the pool ###
     float *result = processTask(task);     // Process task.
     // TODO: display computation time.
     // TODO: maybe add a mutex lock?
-    fprintf(stderr,
-            "finish task [%d, %d]\n",
-            task->start_row,
-            task->start_row + task->num_of_rows);
+    // fprintf(stderr,
+    //         "finish task [%d, %d]\n",
+    //         task->start_row,
+    //         task->start_row + task->num_of_rows);
     writeResult(result, task->start_row, task->num_of_rows);
-    sem_wait(&task_sem); // Finish one task.
   }
-  fprintf(stderr, "Finish all!\n");
+  // fprintf(stderr, "Finish all!\n");
   return 0;              // FIXME
 }
 
@@ -278,8 +277,6 @@ int main(int argc, char *args[])
     exit(1);
   }
 
-  sem_init(&task_sem, 0, 0); // No task assigned yet.
-
   // An array of worker threads.
   pthread_t workers[workerCount];
 
@@ -302,9 +299,6 @@ int main(int argc, char *args[])
     // Create and put a task in the next unused buffer.
     putTask(createTask(&nextTaskRow, rowPerTask));
 
-    // Assigned one new task.
-    sem_post(&task_sem);
-
     // Signal any waiting worker that a new task has arrived.
     Pthread_cond_signal(&fill);
 
@@ -315,10 +309,6 @@ int main(int argc, char *args[])
   // And the workers should terminate after finishing all pending tasks.
   // TODO
   canFinish = 1;
-
-  for (int i = 0; i < workerCount; i++) {
-    sem_post(&task_sem);
-  }
 
   // ---------------------------------------------------------------------
 
