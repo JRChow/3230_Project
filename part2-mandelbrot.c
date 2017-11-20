@@ -9,17 +9,16 @@
 **********************************************************************/
 #define MIN(a, b) (((a) < (b)) ? (a) : (b)) // User-defined min function
 
+#include "Mandel.h"
+#include "draw.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include "Mandel.h"
-#include "draw.h"
 #include <assert.h>
 #include <sys/resource.h>
-#include <signal.h>
 #include <string.h>
 #include <pthread.h>
 
@@ -34,8 +33,8 @@ typedef struct task {
 // -----------------------------------------------------------------------------
 
 // The task pool.
-TASK *taskPool;
-int   buffCount;   // Third arg (number of buffers in the pool).
+TASK **taskPool;
+int    buffCount;  // Third arg (number of buffers in the pool).
 
 int fillInd   = 0; // Pointer for filling the task pool.
 int useInd    = 0; // Pointer for using the task pool.
@@ -43,16 +42,18 @@ int taskCount = 0; // How many tasks are actually in the pool?
 
 // Lock for the task pool.
 pthread_mutex_t poolLock = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t  empty, fill; // CV for empty and full.
+pthread_cond_t  empty    = PTHREAD_COND_INITIALIZER; // CV for empty. TODO:
+                                                     // clarify meaning
+pthread_cond_t fill = PTHREAD_COND_INITIALIZER;      // CV for fill. TODO:
+                                                     // clarify meaning
 
 // -----------------------------------------------------------------------------
 
 // A wrapper function for creating threads.
 void Pthread_create(pthread_t            *thread,
                     const pthread_attr_t *attr,
-                    void *(*start_routine)(
-                      void *),
-                    void *arg) {
+                    void *(*start_routine)(void *),
+                    void                 *arg) {
   int rc = pthread_create(thread, attr, start_routine, arg);
 
   assert(rc == 0);
@@ -94,7 +95,6 @@ void Pthread_cond_signal(pthread_cond_t *cond) {
 }
 
 // -----------------------------------------------------------------------------
-
 
 // Process a task.
 void processTask(TASK *tsk) {
@@ -174,21 +174,21 @@ int hasTask(int nextTaskRow) {
 // Put newTask into the task pool.
 void putTask(TASK *newTask) {
   assert(newTask != NULL);
-  taskPool[fillInd] = *newTask;
+  taskPool[fillInd] = newTask;
   fillInd           = (fillInd + 1) % buffCount;
   taskCount++;
 }
 
 // Get task from the task pool.
-TASK getTask() {
-  TASK temp = taskPool[useInd];
+TASK* getTask() {
+  TASK *temp = taskPool[useInd];
 
   useInd = (useInd + 1) % buffCount;
   taskCount--;
   return temp;
 }
 
-// // Context data for a worker thread.
+// TODO Context data for a worker thread.
 // typedef struct __context_t {
 // } context_t;
 
@@ -203,9 +203,10 @@ void* work(void *arg) {
   while (taskCount == 0) {               // While task pool is empty
     pthread_cond_wait(&fill, &poolLock); // Wait until it becomes filled.
   }
-  TASK task = getTask();
-  Pthread_cond_signal(&empty);
-  Pthread_mutex_unlock(&poolLock);
+  TASK *task = getTask();                // Get task from the pool.
+  Pthread_cond_signal(&empty);           // A new buffer is available.
+  Pthread_mutex_unlock(&poolLock);       // Unlock the pool.
+  // processTask(TASK * tsk)
 
   // }
 }
