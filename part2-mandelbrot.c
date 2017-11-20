@@ -37,10 +37,11 @@ float *pixels;
 
 // The task pool.
 TASK **taskPool;
-int    buffCount; // Third arg (number of buffers in the pool).
+int    buffCount;  // Third arg (number of buffers in the pool).
 
-int fillInd = 0;  // Pointer for filling the task pool.
-int useInd  = 0;  // Pointer for using the task pool.
+int fillInd   = 0; // Pointer for filling the task pool.
+int useInd    = 0; // Pointer for using the task pool.
+int taskCount = 0; // How many tasks are actually in the pool?
 
 // Lock for the task pool.
 pthread_mutex_t poolLock = PTHREAD_MUTEX_INITIALIZER;
@@ -207,6 +208,7 @@ void putTask(TASK *newTask) {
   taskPool[fillInd] = newTask;
   fillInd           = (fillInd + 1) % buffCount;
   taskCount++;
+
   // fprintf(stderr,
   //         "put task [%d, %d]",
   //         newTask->start_row,
@@ -215,10 +217,7 @@ void putTask(TASK *newTask) {
 
 // Get task from the task pool.
 TASK* getTask() {
-  int iTaskCount;
-
-  sem_getvalue(&taskCount, &iTaskCount);
-  assert(iTaskCount > 0);
+  assert(taskCount > 0);
   TASK *temp = taskPool[useInd];
 
   useInd = (useInd + 1) % buffCount;
@@ -231,12 +230,13 @@ void* work(void *arg) {
   // **************************** Consumer ****************************
   // fprintf(stderr, "start working!\n");
 
-  while (1) { // TODO: While not terminated
+  while (1) {                              // TODO: While not terminated
     // fprintf(stderr, "new iter!\n");
-    Pthread_mutex_lock(&poolLock); // ### Lock the pool ###.
+    Pthread_mutex_lock(&poolLock);         // ### Lock the pool ###.
 
     while (taskCount == 0) {               // While task pool is empty
       if (canFinish) return 0;
+
       pthread_cond_wait(&fill, &poolLock); // Wait until it becomes filled.
     }
     TASK *task = getTask();                // Get task from the pool.
@@ -249,20 +249,11 @@ void* work(void *arg) {
     //         "finish task [%d, %d]\n",
     //         task->start_row,
     //         task->start_row + task->num_of_rows);
-<<<<<<< HEAD
-    // Write result to pixels.
     writeResult(result, task->start_row, task->num_of_rows);
+  }
 
-    // sem_wait(&task_sem); // Finish one task.
-  }
-  fprintf(stderr, "Finish all!\n");
-  return 0; // FIXME
-=======
-    writeResult(result, task->start_row, task->num_of_rows);
-  }
   // fprintf(stderr, "Finish all!\n");
-  return 0;              // FIXME
->>>>>>> c1bb74c
+  return 0; // FIXME
 }
 
 // Main function
@@ -297,11 +288,6 @@ int main(int argc, char *args[])
     exit(1);
   }
 
-<<<<<<< HEAD
-  sem_init(&taskCount, 0, 0); // No task assigned yet.
-
-=======
->>>>>>> c1bb74c
   // An array of worker threads.
   pthread_t workers[workerCount];
 
@@ -317,21 +303,13 @@ int main(int argc, char *args[])
     Pthread_mutex_lock(&poolLock); // # Lock the pool.
 
     // While task pool is full
-    int iTaskCount;
-    sem_getvalue(&taskCount, &iTaskCount);
-    while (iTaskCount == buffCount) {
+    while (taskCount == buffCount) {
       Pthread_cond_wait(&empty, &poolLock); // Wait until it's not full
     }
 
     // Create and put a task in the next unused buffer.
     putTask(createTask(&nextTaskRow, rowPerTask));
 
-<<<<<<< HEAD
-    // Assigned one new task.
-    sem_post(&taskCount);
-
-=======
->>>>>>> c1bb74c
     // Signal any waiting worker that a new task has arrived.
     Pthread_cond_signal(&fill);
 
@@ -342,12 +320,6 @@ int main(int argc, char *args[])
   // And the workers should terminate after finishing all pending tasks.
   fprintf(stderr, "No more new tasks!\n");
   canFinish = 1;
-<<<<<<< HEAD
-  // for (int i = 0; i < workerCount; i++) {
-  //   sem_post(&taskCount);
-  // }
-=======
->>>>>>> c1bb74c
 
   // ---------------------------------------------------------------------
 
