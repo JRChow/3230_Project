@@ -1,4 +1,4 @@
-/**********************************************************************
+/*******************************************************************************
 * Filename:part2-mandelbrot.c
 * Student name: Zhou Jingran
 * Student no.: 3035232468
@@ -6,7 +6,7 @@
 * version: 1.1
 * Development platform: Ubuntu 16.04
 * Compilation: gcc part2-mandelbrot.c -o 2-mandel -l SDL2 -l m -pthread
-**********************************************************************/
+*******************************************************************************/
 #define MIN(a, b) (((a) < (b)) ? (a) : (b)) // User-defined min function
 
 #include "Mandel.h"
@@ -213,44 +213,58 @@ TASK* getTask() {
   return temp;
 }
 
-// The work of a worker.
+// The work of a worker. Takes in its ID as input. Returns the number of tasks
+// completed.
 void* work(void *arg) {
   // **************************** Consumer ****************************
   assert(arg != NULL);
-  int* workerID = (int*)arg;
+  int *workerID = (int *)arg;
   fprintf(stderr, "Worker(%d): Start up. Wait for task.\n", *workerID);
+  int  temp           = 0;                 // 0 task completed at first.
+  int *tTaskCompleted = &temp;             // How many tasks has this thread
+                                           // completed.
 
   while (1) {                              // TODO: While not terminated
     Pthread_mutex_lock(&poolLock);         // ### Lock the pool ###.
 
     while (taskCount == 0) {               // While task pool is empty
       if (canFinish) {
-        Pthread_mutex_unlock(&poolLock);       // Unlock before death.
-        return 0;
+        Pthread_mutex_unlock(&poolLock);   // Unlock before death.
+        return (void *)tTaskCompleted;
       }
-      pthread_cond_wait(&fill, &poolLock); // Wait until it becomes filled.
+      pthread_cond_wait(&fill, &poolLock); // Wait until it becomes
+                                           // filled.
     }
     TASK *task = getTask();                // Get task from the pool.
     Pthread_cond_signal(&empty);           // A new buffer is available.
     Pthread_mutex_unlock(&poolLock);       // ### Unlock the pool ###
     fprintf(stderr, "Worker(%d): Start computation...\n", *workerID);
-    struct timespec tStartTime, tEndTime; // Record the thread start time and end time.
+
+    // Record the thread start time and end time
+    struct timespec tStartTime, tEndTime;
     clock_gettime(CLOCK_MONOTONIC, &tStartTime); // Get thread start time.
-    float *result = processTask(task);     // Process task.
-    clock_gettime(CLOCK_MONOTONIC, &tEndTime); // Get thread end time.
+    float *result = processTask(task);           // Process task.
+    clock_gettime(CLOCK_MONOTONIC, &tEndTime);   // Get thread end time.
     // Calculate the elapsed time.
-    double tElapsedTime = 
-    (tEndTime.tv_nsec - tStartTime.tv_nsec) / 1000000.0 +
-    (tEndTime.tv_sec - tStartTime.tv_sec) * 1000.0;
-    fprintf(stderr, "Worker(%d):                  ...completed. Elapsed time = %f ms\n", *workerID, tElapsedTime); // TODO: add time
-    writeResult(result, task->start_row, task->num_of_rows);
-  }
+    double tElapsedTime =
+      (tEndTime.tv_nsec - tStartTime.tv_nsec) / 1000000.0 +
+      (tEndTime.tv_sec - tStartTime.tv_sec) * 1000.0;
+    fprintf(stderr,
+            "Worker(%d):                  ...completed. Elapsed time = %f ms\n",
+            *workerID,
+            tElapsedTime);
+    writeResult(result, task->start_row, task->num_of_rows); // Write result to
+                                                             // pixels.
+    (*tTaskCompleted)++;                                     // Increment task
+                                                             // completed.
+  } // Forever loop.
 }
 
 // Main function
 int main(int argc, char *args[])
 {
-  struct timespec startTime, endTime; // Record the total start time and end time.
+  // Record the total start time and end time.
+  struct timespec startTime, endTime;
 
   clock_gettime(CLOCK_MONOTONIC, &startTime); // Get start time.
 
@@ -282,9 +296,9 @@ int main(int argc, char *args[])
 
   // Create worker threads.
   for (int i = 0; i < workerCount; i++) {
-    int* workerID = (int*) malloc(sizeof(*workerID));
+    int *workerID = (int *)malloc(sizeof(*workerID));
     *workerID = i;
-    Pthread_create(&(workers[i]), NULL, &work, (void*)workerID);
+    Pthread_create(&(workers[i]), NULL, &work, (void *)workerID);
   }
 
   // ---------------------------------------------------------------------
@@ -309,16 +323,20 @@ int main(int argc, char *args[])
 
   // Inform all workers that no more tasks will be assigned.
   // And the workers should terminate after finishing all pending tasks.
-  Pthread_mutex_lock(&poolLock); // # Lock the pool.
+  Pthread_mutex_lock(&poolLock);   // # Lock the pool.
   canFinish = 1;
   Pthread_mutex_unlock(&poolLock); // # Unlock the pool.
 
   // ---------------------------------------------------------------------
 
-  // TODO: more stats
   // Wait for all worker threads
   for (int i = 0; i < workerCount; i++) {
-    Pthread_join(workers[i], NULL); // TODO: change NULL to a ret val struct.
+    void *tTaskCompleted;
+    Pthread_join(workers[i], &tTaskCompleted);
+    fprintf(stderr,
+            "Worker thread %d has terminated and completed %d tasks.\n",
+            i,
+            *((int *)tTaskCompleted));
   }
   fprintf(stderr, "All worker threads terminated.\n");
 
@@ -338,7 +356,7 @@ int main(int argc, char *args[])
     "Total time spent by the process and its thread in system mode = %f ms\n",
     proc_thread_usage.ru_stime.tv_usec / 1000000.0 + proc_thread_usage.ru_stime.tv_sec *
     1000.0);
-  
+
   // Get end time.
   clock_gettime(CLOCK_MONOTONIC,
                 &endTime);
@@ -356,8 +374,7 @@ int main(int argc, char *args[])
   // Draw the image by using the SDL2 library
   DrawImage(pixels, IMAGE_WIDTH, IMAGE_HEIGHT, "Mandelbrot demo", 5000);
 
-  //
-  // free(pixels); // Free the pixels.
-  //
+  free(pixels); // Free the pixels.
+
   return 0;
 }
