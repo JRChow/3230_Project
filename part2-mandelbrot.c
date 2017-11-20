@@ -202,6 +202,10 @@ void putTask(TASK *newTask) {
   taskPool[fillInd] = newTask;
   fillInd           = (fillInd + 1) % buffCount;
   taskCount++;
+  fprintf(stderr,
+          "put task [%d, %d]",
+          newTask->start_row,
+          newTask->start_row + newTask->num_of_rows);
 }
 
 // Get task from the task pool.
@@ -231,6 +235,10 @@ void* work(void *arg) {
     float *result = processTask(task);     // Process task.
     // TODO: display computation time.
     // TODO: maybe add a mutex lock?
+    fprintf(stderr,
+            "finish task [%d, %d]\n",
+            task->start_row,
+            task->start_row + task->num_of_rows);
     writeResult(result, task->start_row, task->num_of_rows);
     sem_wait(&task_sem); // Finish one task.
   }
