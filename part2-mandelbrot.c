@@ -108,16 +108,11 @@ float* processTask(TASK *tsk) {
 
   float *result = (float *)malloc(sizeof(float) * tsk->num_of_rows * IMAGE_WIDTH);
 
-  // fprintf(stderr, "process task %d => %d\n",tsk->start_row, tsk->start_row +
-  // tsk->num_of_rows - 1);
-
   // Process task row by row.
   for (int y = tsk->start_row; y < (tsk->start_row + tsk->num_of_rows); y++) {
     for (int x = 0; x < IMAGE_WIDTH; x++) {
       int index = (y - tsk->start_row) * IMAGE_WIDTH + x; // Index into result.
       result[index] = Mandelbrot(x, y);
-
-      // fprintf(stderr, "Compute (x=%d, y=%d)\n", x, y);
     }
   }
 
@@ -144,8 +139,6 @@ void writeResult(float *result, int start_row, int num_of_rows) {
   assert(result != NULL);
 
   int base = start_row * IMAGE_WIDTH;
-
-  // fprintf(stderr, "WRITE [%d, %d]\n", base, base+length);
 
   for (int i = 0; i < num_of_rows * IMAGE_WIDTH; i++) {
     pixels[base + i] = result[i];
@@ -208,11 +201,6 @@ void putTask(TASK *newTask) {
   taskPool[fillInd] = newTask;
   fillInd           = (fillInd + 1) % buffCount;
   taskCount++;
-
-  // fprintf(stderr,
-  //         "put task [%d, %d]",
-  //         newTask->start_row,
-  //         newTask->start_row + newTask->num_of_rows);
 }
 
 // Get task from the task pool.
@@ -221,22 +209,22 @@ TASK* getTask() {
   TASK *temp = taskPool[useInd];
 
   useInd = (useInd + 1) % buffCount;
-  sem_wait(&taskCount); // Decrease task count by 1
+  taskCount--;
   return temp;
 }
 
 // The work of a worker.
 void* work(void *arg) {
   // **************************** Consumer ****************************
-  // fprintf(stderr, "start working!\n");
 
   while (1) {                              // TODO: While not terminated
-    // fprintf(stderr, "new iter!\n");
     Pthread_mutex_lock(&poolLock);         // ### Lock the pool ###.
 
     while (taskCount == 0) {               // While task pool is empty
-      if (canFinish) return 0;
-
+      if (canFinish) {
+        Pthread_mutex_unlock(&poolLock);       // Unlock before death.
+        return 0;
+      }
       pthread_cond_wait(&fill, &poolLock); // Wait until it becomes filled.
     }
     TASK *task = getTask();                // Get task from the pool.
@@ -244,16 +232,8 @@ void* work(void *arg) {
     Pthread_mutex_unlock(&poolLock);       // ### Unlock the pool ###
     float *result = processTask(task);     // Process task.
     // TODO: display computation time.
-    // TODO: maybe add a mutex lock?
-    // fprintf(stderr,
-    //         "finish task [%d, %d]\n",
-    //         task->start_row,
-    //         task->start_row + task->num_of_rows);
     writeResult(result, task->start_row, task->num_of_rows);
   }
-
-  // fprintf(stderr, "Finish all!\n");
-  return 0; // FIXME
 }
 
 // Main function
@@ -318,8 +298,9 @@ int main(int argc, char *args[])
 
   // Inform all workers that no more tasks will be assigned.
   // And the workers should terminate after finishing all pending tasks.
-  fprintf(stderr, "No more new tasks!\n");
+  Pthread_mutex_lock(&poolLock); // # Lock the pool.
   canFinish = 1;
+  Pthread_mutex_unlock(&poolLock); // # Unlock the pool.
 
   // ---------------------------------------------------------------------
 
