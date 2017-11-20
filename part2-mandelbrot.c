@@ -53,7 +53,8 @@ pthread_cond_t  empty    = PTHREAD_COND_INITIALIZER; // CV for empty. TODO:
                                                      // clarify meaning
 pthread_cond_t fill = PTHREAD_COND_INITIALIZER;      // CV for fill. TODO:
                                                      // clarify meaning
-int canTerminate = 0; // FIXME: can threads terminate?w
+int canTerminate = 0;                                // FIXME: can threads
+                                                     // terminate?w
 
 // -----------------------------------------------------------------------------
 
@@ -220,24 +221,22 @@ void* work(void *arg) {
   // ********************* Consumer *********************
   fprintf(stderr, "working!\n");
 
-  while (1) {                            // TODO: While not terminated
-  Pthread_mutex_lock(&poolLock);
+  while (!canTerminate) {                  // TODO: While not terminated
+    Pthread_mutex_lock(&poolLock);
 
-  while (taskCount == 0) {               // While task pool is empty
-    pthread_cond_wait(&fill, &poolLock); // Wait until it becomes filled.
-  }
-  TASK *task = getTask();                // Get task from the pool.
-  Pthread_cond_signal(&empty);           // A new buffer is available.
-  Pthread_mutex_unlock(&poolLock);       // Unlock the pool.
-  float *result = processTask(task);     // Process task.
-  // TODO: display computation time.
-  // TODO: return result.
-  RETVAL *retVal = createRetVal(task, result);
-
-  // TODO: check termination condition
+    while (taskCount == 0) {               // While task pool is empty
+      pthread_cond_wait(&fill, &poolLock); // Wait until it becomes filled.
+    }
+    TASK *task = getTask();                // Get task from the pool.
+    Pthread_cond_signal(&empty);           // A new buffer is available.
+    Pthread_mutex_unlock(&poolLock);       // Unlock the pool.
+    float *result = processTask(task);     // Process task.
+    // TODO: display computation time.
+    // TODO: return result.
+    RETVAL *retVal = createRetVal(task, result);
   }
   fprintf(stderr, "Finish!\n");
-  return retVal;
+  return 0; // FIXME
 }
 
 // Main function
@@ -303,6 +302,7 @@ int main(int argc, char *args[])
   // Inform all workers that no more tasks will be assigned.
   // And the workers should terminate after finishing all pending tasks.
   // TODO
+  canTerminate = 1;
 
   // ---------------------------------------------------------------------
 
