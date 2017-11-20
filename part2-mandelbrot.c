@@ -30,6 +30,13 @@ typedef struct task {
   int num_of_rows; // How many rows.
 } TASK;
 
+// Structure of return value.
+typedef struct retVal {
+  int    start_ind; // Starting index in pixels.
+  int    length;    // Length of the result.
+  float *result;    // Computation results.
+} RETVAL;
+
 // -----------------------------------------------------------------------------
 
 // The task pool.
@@ -97,14 +104,23 @@ void Pthread_cond_signal(pthread_cond_t *cond) {
 // -----------------------------------------------------------------------------
 
 // Process a task.
-void processTask(TASK *tsk) {
+float* processTask(TASK *tsk) {
   assert(tsk != NULL);
   assert(tsk->start_row >= 0);
   assert(tsk->start_row < IMAGE_HEIGHT);
   assert(tsk->start_row + tsk->num_of_rows <= IMAGE_HEIGHT);
 
+  float *result = (float *)malloc(sizeof(float) * tsk->num_of_rows * IMAGE_WIDTH);
+
   // Process task row by row.
-  // TODO
+  for (int y = tsk->start_row; y < (tsk->start_row + tsk->num_of_rows); y++) {
+    for (int x = 0; x < IMAGE_WIDTH; x++) {
+      int index = (y - tsk->start_row) * IMAGE_WIDTH + x; // Index into result.
+      result[index] = Mandelbrot(x, y);
+    }
+  }
+
+  return result;
 }
 
 // Create a task depending on nextTaskRow. nextTaskRow is updated.
@@ -119,6 +135,16 @@ TASK* createTask(int *nextTaskRow, int rowPerTask) {
   *nextTaskRow += tskBuf->num_of_rows;
 
   return tskBuf;
+}
+
+// Create a retVal.
+RETVAL* createRetVal(TASK *task, float *result) {
+  RETVAL *retval = (RETVAL *)malloc(sizeof(*retval));
+
+  retval->start_ind = task->start_row * IMAGE_WIDTH;
+  retval->length    = task->num_of_rows;
+  retval->result    = result;
+  return retval;
 }
 
 // Read input arguments.
@@ -188,10 +214,6 @@ TASK* getTask() {
   return temp;
 }
 
-// TODO Context data for a worker thread.
-// typedef struct __context_t {
-// } context_t;
-
 // The work of a worker.
 void* work(void *arg) {
   // ********************* Consumer *********************
@@ -206,9 +228,14 @@ void* work(void *arg) {
   TASK *task = getTask();                // Get task from the pool.
   Pthread_cond_signal(&empty);           // A new buffer is available.
   Pthread_mutex_unlock(&poolLock);       // Unlock the pool.
-  // processTask(TASK * tsk)
+  float *result = processTask(task);     // Process task.
+  // TODO: display computation time.
+  // TODO: return result.
+  RETVAL *retVal = createRetVal(task, result);
 
+  // TODO: check termination condition
   // }
+  return retVal;
 }
 
 // Main function
