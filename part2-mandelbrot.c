@@ -234,8 +234,15 @@ void* work(void *arg) {
     Pthread_cond_signal(&empty);           // A new buffer is available.
     Pthread_mutex_unlock(&poolLock);       // ### Unlock the pool ###
     fprintf(stderr, "Worker(%d): Start computation...\n", *workerID);
+    struct timespec tStartTime, tEndTime; // Record the thread start time and end time.
+    clock_gettime(CLOCK_MONOTONIC, &tStartTime); // Get thread start time.
     float *result = processTask(task);     // Process task.
-    fprintf(stderr, "Worker(%d):                  ...completed. Elapsed time = \n", *workerID); // TODO: add time
+    clock_gettime(CLOCK_MONOTONIC, &tEndTime); // Get thread end time.
+    // Calculate the elapsed time.
+    double tElapsedTime = 
+    (tEndTime.tv_nsec - tStartTime.tv_nsec) / 1000000.0 +
+    (tEndTime.tv_sec - tStartTime.tv_sec) * 1000.0;
+    fprintf(stderr, "Worker(%d):                  ...completed. Elapsed time = %f ms\n", *workerID, tElapsedTime); // TODO: add time
     writeResult(result, task->start_row, task->num_of_rows);
   }
 }
@@ -243,11 +250,9 @@ void* work(void *arg) {
 // Main function
 int main(int argc, char *args[])
 {
-  // Record the process start time and end time.
-  // struct timespec proc_start_time, proc_end_time;
+  struct timespec startTime, endTime; // Record the total start time and end time.
 
-  // Get process start time.
-  // clock_gettime(CLOCK_MONOTONIC, &proc_start_time);
+  clock_gettime(CLOCK_MONOTONIC, &startTime); // Get start time.
 
   // First arg (number of worker processes to be created).
   int workerCount;
@@ -344,18 +349,17 @@ int main(int argc, char *args[])
   //   self_usage.ru_stime.tv_usec / 1000000.0 + self_usage.ru_stime.tv_sec *
   //   1000.0);
   //
-  // // Get process end time.
-  // clock_gettime(CLOCK_MONOTONIC,
-  //               &proc_end_time);
+  // Get end time.
+  clock_gettime(CLOCK_MONOTONIC,
+                &endTime);
   //
-  // // Calculate and display the total elapsed time.
-  // double elapsedTime =
-  //   (proc_end_time.tv_nsec - proc_start_time.tv_nsec) / 1000000.0 +
-  //   (proc_end_time.tv_sec - proc_start_time.tv_sec) * 1000.0;
-  // fprintf(stderr,
-  //         "Total elapsed time measured by parent process = %f ms\n",
-  //         elapsedTime);
-  //
+  // Calculate and display the total elapsed time.
+  double totalElapsedTime =
+    (endTime.tv_nsec - startTime.tv_nsec) / 1000000.0 +
+    (endTime.tv_sec - startTime.tv_sec) * 1000.0;
+  fprintf(stderr,
+          "Total elapsed time measured by the process = %f ms\n",
+          totalElapsedTime);
 
   fprintf(stderr, "Draw image\n");
 
