@@ -216,7 +216,9 @@ TASK* getTask() {
 // The work of a worker.
 void* work(void *arg) {
   // **************************** Consumer ****************************
-  fprintf(stderr, "Worker(%d): Start up. Wait for task.\n", *((int*)arg));
+  assert(arg != NULL);
+  int* workerID = (int*)arg;
+  fprintf(stderr, "Worker(%d): Start up. Wait for task.\n", *workerID);
 
   while (1) {                              // TODO: While not terminated
     Pthread_mutex_lock(&poolLock);         // ### Lock the pool ###.
@@ -231,8 +233,9 @@ void* work(void *arg) {
     TASK *task = getTask();                // Get task from the pool.
     Pthread_cond_signal(&empty);           // A new buffer is available.
     Pthread_mutex_unlock(&poolLock);       // ### Unlock the pool ###
+    fprintf(stderr, "Worker(%d): Start computation...\n", *workerID);
     float *result = processTask(task);     // Process task.
-    // TODO: display computation time.
+    fprintf(stderr, "Worker(%d):                  ...completed. Elapsed time = \n", *workerID); // TODO: add time
     writeResult(result, task->start_row, task->num_of_rows);
   }
 }
