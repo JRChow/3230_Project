@@ -310,10 +310,12 @@ int main(int argc, char *args[])
 
   // ---------------------------------------------------------------------
 
+  // TODO: more stats
   // Wait for all worker threads
   for (int i = 0; i < workerCount; i++) {
     Pthread_join(workers[i], NULL); // TODO: change NULL to a ret val struct.
   }
+  fprintf(stderr, "All worker threads terminated.\n");
 
   // ---------------------------------------------------------------------
 
@@ -354,7 +356,8 @@ int main(int argc, char *args[])
   //         "Total elapsed time measured by parent process = %f ms\n",
   //         elapsedTime);
   //
-  // printf("Draw the image\n");
+
+  fprintf(stderr, "Draw image\n");
 
   // Draw the image by using the SDL2 library
   DrawImage(pixels, IMAGE_WIDTH, IMAGE_HEIGHT, "Mandelbrot demo", 5000);
