@@ -342,10 +342,13 @@ int main(int argc, char *args[])
 
   // ---------------------------------------------------------------------
 
+  // Resource usage.
   struct rusage proc_thread_usage;
 
+  // Get resource usage of self.
   getrusage(RUSAGE_SELF, &proc_thread_usage);
 
+  // Print stats.
   fprintf(
     stderr,
     "Total time spent by the process and its thread in user mode = %f ms\n",
