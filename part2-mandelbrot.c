@@ -216,6 +216,7 @@ TASK* getTask() {
 // The work of a worker.
 void* work(void *arg) {
   // **************************** Consumer ****************************
+  fprintf(stderr, "Worker(%d): Start up. Wait for task.\n", *((int*)arg));
 
   while (1) {                              // TODO: While not terminated
     Pthread_mutex_lock(&poolLock);         // ### Lock the pool ###.
@@ -273,7 +274,9 @@ int main(int argc, char *args[])
 
   // Create worker threads.
   for (int i = 0; i < workerCount; i++) {
-    Pthread_create(&(workers[i]), NULL, &work, NULL);
+    int* workerID = (int*) malloc(sizeof(*workerID));
+    *workerID = i;
+    Pthread_create(&(workers[i]), NULL, &work, (void*)workerID);
   }
 
   // ---------------------------------------------------------------------
