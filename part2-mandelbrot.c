@@ -53,6 +53,7 @@ pthread_cond_t  empty    = PTHREAD_COND_INITIALIZER; // CV for empty. TODO:
                                                      // clarify meaning
 pthread_cond_t fill = PTHREAD_COND_INITIALIZER;      // CV for fill. TODO:
                                                      // clarify meaning
+int canTerminate = 0; // FIXME: can threads terminate?w
 
 // -----------------------------------------------------------------------------
 
@@ -207,8 +208,8 @@ void putTask(TASK *newTask) {
 
 // Get task from the task pool.
 TASK* getTask() {
+  assert(taskCount > 0);
   TASK *temp = taskPool[useInd];
-
   useInd = (useInd + 1) % buffCount;
   taskCount--;
   return temp;
@@ -219,7 +220,7 @@ void* work(void *arg) {
   // ********************* Consumer *********************
   fprintf(stderr, "working!\n");
 
-  // while (1) {                            // TODO: While not terminated
+  while (1) {                            // TODO: While not terminated
   Pthread_mutex_lock(&poolLock);
 
   while (taskCount == 0) {               // While task pool is empty
@@ -234,7 +235,8 @@ void* work(void *arg) {
   RETVAL *retVal = createRetVal(task, result);
 
   // TODO: check termination condition
-  // }
+  }
+  fprintf(stderr, "Finish!\n");
   return retVal;
 }
 
@@ -282,7 +284,7 @@ int main(int argc, char *args[])
   // **************************** Producer ****************************
 
   while (hasTask(nextTaskRow)) {
-    Pthread_mutex_lock(&poolLock); // Lock the pool.
+    Pthread_mutex_lock(&poolLock); // # Lock the pool.
 
     // While task pool is full
     while (taskCount == buffCount) {
@@ -295,8 +297,7 @@ int main(int argc, char *args[])
     // Signal any waiting worker that a new task has arrived.
     Pthread_cond_signal(&fill);
 
-    // Unlock the pool.
-    Pthread_mutex_unlock(&poolLock);
+    Pthread_mutex_unlock(&poolLock); // # Unlock the pool.
   }
 
   // Inform all workers that no more tasks will be assigned.
