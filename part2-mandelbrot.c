@@ -37,17 +37,17 @@ float *pixels;
 
 // The task pool.
 TASK **taskPool;
-int    buffCount;  // Third arg (number of buffers in the pool).
+int    buffCount; // Third arg (number of buffers in the pool).
 
-int fillInd   = 0; // Pointer for filling the task pool.
-int useInd    = 0; // Pointer for using the task pool.
-int taskCount = 0; // How many tasks are actually in the pool?
+int fillInd = 0;  // Pointer for filling the task pool.
+int useInd  = 0;  // Pointer for using the task pool.
 
 // Lock for the task pool.
 pthread_mutex_t poolLock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  empty    = PTHREAD_COND_INITIALIZER; // FIXME CV for empty.
 pthread_cond_t  fill     = PTHREAD_COND_INITIALIZER; // FIXME CV for fill.
-sem_t task_sem;
+sem_t taskCount;                                     // How many tasks are
+                                                     // actually in the pool?
 
 int canFinish = 0;
 
@@ -109,13 +109,15 @@ float* processTask(TASK *tsk) {
 
   float *result = (float *)malloc(sizeof(float) * tsk->num_of_rows * IMAGE_WIDTH);
 
-  // fprintf(stderr, "process task %d => %d\n",tsk->start_row, tsk->start_row + tsk->num_of_rows - 1);
+  // fprintf(stderr, "process task %d => %d\n",tsk->start_row, tsk->start_row +
+  // tsk->num_of_rows - 1);
 
   // Process task row by row.
   for (int y = tsk->start_row; y < (tsk->start_row + tsk->num_of_rows); y++) {
     for (int x = 0; x < IMAGE_WIDTH; x++) {
       int index = (y - tsk->start_row) * IMAGE_WIDTH + x; // Index into result.
       result[index] = Mandelbrot(x, y);
+
       // fprintf(stderr, "Compute (x=%d, y=%d)\n", x, y);
     }
   }
@@ -206,7 +208,8 @@ void putTask(TASK *newTask) {
   assert(newTask != NULL);
   taskPool[fillInd] = newTask;
   fillInd           = (fillInd + 1) % buffCount;
-  taskCount++;
+  sem_post(&taskCount); // Increase task count by one.
+
   // fprintf(stderr,
   //         "put task [%d, %d]\n",
   //         newTask->start_row,
@@ -215,10 +218,14 @@ void putTask(TASK *newTask) {
 
 // Get task from the task pool.
 TASK* getTask() {
-  assert(taskCount > 0);
+  int iTaskCount;
+
+  sem_getvalue(&taskCount, &iTaskCount);
+  assert(iTaskCount > 0);
   TASK *temp = taskPool[useInd];
+
   useInd = (useInd + 1) % buffCount;
-  taskCount--;
+  sem_wait(&taskCount); // Decrease task count by 1
   return temp;
 }
 
@@ -227,9 +234,10 @@ void* work(void *arg) {
   // **************************** Consumer ****************************
   // fprintf(stderr, "start working!\n");
 
-  while (1) { // TODO: While not terminated
+  while (1) {                              // TODO: While not terminated
     // fprintf(stderr, "new iter!\n");
-    Pthread_mutex_lock(&poolLock); // # Lock the pool.
+    Pthread_mutex_lock(&poolLock);         // # Lock the pool.
+    int iTaskCount = sem_getvalue(&taskCount, &iTaskCount);
 
     while (taskCount == 0) {               // While task pool is empty
       pthread_cond_wait(&fill, &poolLock); // Wait until it becomes filled.
@@ -245,11 +253,12 @@ void* work(void *arg) {
     //         task->start_row,
     //         task->start_row + task->num_of_rows);
     // Write result to pixels.
-    writeResult(result, task->start_row, task->num_of_rows); 
-    sem_wait(&task_sem); // Finish one task.
+    writeResult(result, task->start_row, task->num_of_rows);
+
+    // sem_wait(&task_sem); // Finish one task.
   }
   fprintf(stderr, "Finish all!\n");
-  return 0;              // FIXME
+  return 0; // FIXME
 }
 
 // Main function
@@ -284,7 +293,7 @@ int main(int argc, char *args[])
     exit(1);
   }
 
-  sem_init(&task_sem, 0, 0); // No task assigned yet.
+  sem_init(&taskCount, 0, 0); // No task assigned yet.
 
   // An array of worker threads.
   pthread_t workers[workerCount];
@@ -309,7 +318,7 @@ int main(int argc, char *args[])
     putTask(createTask(&nextTaskRow, rowPerTask));
 
     // Assigned one new task.
-    sem_post(&task_sem);
+    sem_post(&taskCount);
 
     // Signal any waiting worker that a new task has arrived.
     Pthread_cond_signal(&fill);
@@ -320,8 +329,9 @@ int main(int argc, char *args[])
   // Inform all workers that no more tasks will be assigned.
   // And the workers should terminate after finishing all pending tasks.
   canFinish = 1;
+
   for (int i = 0; i < workerCount; i++) {
-    sem_post(&task_sem);
+    sem_post(&taskCount);
   }
 
   // ---------------------------------------------------------------------
