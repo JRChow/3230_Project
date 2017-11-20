@@ -359,9 +359,10 @@ int main(int argc, char *args[])
   //         elapsedTime);
   //
   // printf("Draw the image\n");
-  //
-  // // Draw the image by using the SDL2 library
-  // DrawImage(pixels, IMAGE_WIDTH, IMAGE_HEIGHT, "Mandelbrot demo", 5000);
+
+  // Draw the image by using the SDL2 library
+  DrawImage(pixels, IMAGE_WIDTH, IMAGE_HEIGHT, "Mandelbrot demo", 5000);
+
   //
   // free(pixels); // Free the pixels.
   //
