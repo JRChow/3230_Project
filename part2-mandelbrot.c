@@ -15,12 +15,12 @@
 #include <stdlib.h>
 #include <time.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 #include <unistd.h>
 #include <assert.h>
 #include <sys/resource.h>
 #include <string.h>
 #include <pthread.h>
+#include <semaphore.h>
 
 // -----------------------------------------------------------------------------
 
@@ -30,14 +30,10 @@ typedef struct task {
   int num_of_rows; // How many rows.
 } TASK;
 
-// Structure of return value.
-typedef struct retVal {
-  int    start_ind; // Starting index in pixels.
-  int    length;    // Length of the result.
-  float *result;    // Computation results.
-} RETVAL;
-
 // -----------------------------------------------------------------------------
+
+// The pixels of the graph.
+float *pixels;
 
 // The task pool.
 TASK **taskPool;
@@ -49,12 +45,8 @@ int taskCount = 0; // How many tasks are actually in the pool?
 
 // Lock for the task pool.
 pthread_mutex_t poolLock = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t  empty    = PTHREAD_COND_INITIALIZER; // CV for empty. TODO:
-                                                     // clarify meaning
-pthread_cond_t fill = PTHREAD_COND_INITIALIZER;      // CV for fill. TODO:
-                                                     // clarify meaning
-int canTerminate = 0;                                // FIXME: can threads
-                                                     // terminate?w
+pthread_cond_t  empty    = PTHREAD_COND_INITIALIZER; // FIXME CV for empty.
+pthread_cond_t  fill     = PTHREAD_COND_INITIALIZER; // FIXME CV for fill.
 
 // -----------------------------------------------------------------------------
 
@@ -134,19 +126,21 @@ TASK* createTask(int *nextTaskRow, int rowPerTask) {
   tskBuf->start_row   = *nextTaskRow;
   tskBuf->num_of_rows = MIN(rowPerTask, IMAGE_HEIGHT - *nextTaskRow);
 
-  *nextTaskRow += tskBuf->num_of_rows;
+  *nextTaskRow += tskBuf->num_of_rows; // Update the next task row.
 
   return tskBuf;
 }
 
-// Create a retVal.
-RETVAL* createRetVal(TASK *task, float *result) {
-  RETVAL *retval = (RETVAL *)malloc(sizeof(*retval));
+// Write result to pixels.
+void writeResult(float *result, int start_row, int length) {
+  assert(pixels != NULL);
+  assert(result != NULL);
 
-  retval->start_ind = task->start_row * IMAGE_WIDTH;
-  retval->length    = task->num_of_rows;
-  retval->result    = result;
-  return retval;
+  int base = start_row * IMAGE_WIDTH;
+
+  for (int i = 0; i < length; i++) {
+    pixels[base + i] = result[i];
+  }
 }
 
 // Read input arguments.
@@ -218,10 +212,10 @@ TASK* getTask() {
 
 // The work of a worker.
 void* work(void *arg) {
-  // ********************* Consumer *********************
-  fprintf(stderr, "working!\n");
+  // **************************** Consumer ****************************
+  fprintf(stderr, "start working!\n");
 
-  while (!canTerminate) {                  // TODO: While not terminated
+  while (1) {                              // TODO: While not terminated
     Pthread_mutex_lock(&poolLock);
 
     while (taskCount == 0) {               // While task pool is empty
@@ -232,8 +226,8 @@ void* work(void *arg) {
     Pthread_mutex_unlock(&poolLock);       // Unlock the pool.
     float *result = processTask(task);     // Process task.
     // TODO: display computation time.
-    // TODO: return result.
-    RETVAL *retVal = createRetVal(task, result);
+    // TODO: maybe add a mutex lock?
+    writeResult(result, task->start_row, task->num_of_rows);
   }
   fprintf(stderr, "Finish!\n");
   return 0; // FIXME
@@ -264,7 +258,7 @@ int main(int argc, char *args[])
   taskPool = malloc(buffCount * sizeof(TASK));
 
   // Store the 2D image as a linear array of pixels (in row-major format).
-  float *pixels = (float *)malloc(sizeof(float) * IMAGE_WIDTH * IMAGE_HEIGHT);
+  pixels = (float *)malloc(sizeof(float) * IMAGE_WIDTH * IMAGE_HEIGHT);
 
   if (pixels == NULL) {
     printf("Out of memory!!\n");
@@ -280,7 +274,7 @@ int main(int argc, char *args[])
   }
 
   // ---------------------------------------------------------------------
-  // **************************** Producer ****************************
+  // ******************************* Producer *******************************
 
   while (hasTask(nextTaskRow)) {
     Pthread_mutex_lock(&poolLock); // # Lock the pool.
@@ -302,7 +296,6 @@ int main(int argc, char *args[])
   // Inform all workers that no more tasks will be assigned.
   // And the workers should terminate after finishing all pending tasks.
   // TODO
-  canTerminate = 1;
 
   // ---------------------------------------------------------------------
 
