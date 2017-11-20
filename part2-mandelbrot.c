@@ -239,7 +239,7 @@ void* work(void *arg) {
     Pthread_mutex_lock(&poolLock);         // # Lock the pool.
     int iTaskCount = sem_getvalue(&taskCount, &iTaskCount);
 
-    while (taskCount == 0) {               // While task pool is empty
+    while (iTaskCount == 0) {               // While task pool is empty
       pthread_cond_wait(&fill, &poolLock); // Wait until it becomes filled.
     }
     TASK *task = getTask();                // Get task from the pool.
@@ -310,7 +310,9 @@ int main(int argc, char *args[])
     Pthread_mutex_lock(&poolLock); // # Lock the pool.
 
     // While task pool is full
-    while (taskCount == buffCount) {
+    int iTaskCount;
+    sem_getvalue(&taskCount, &iTaskCount);
+    while (iTaskCount == buffCount) {
       Pthread_cond_wait(&empty, &poolLock); // Wait until it's not full
     }
 
@@ -328,11 +330,11 @@ int main(int argc, char *args[])
 
   // Inform all workers that no more tasks will be assigned.
   // And the workers should terminate after finishing all pending tasks.
+  fprintf(stderr, "No more new tasks!\n");
   canFinish = 1;
-
-  for (int i = 0; i < workerCount; i++) {
-    sem_post(&taskCount);
-  }
+  // for (int i = 0; i < workerCount; i++) {
+  //   sem_post(&taskCount);
+  // }
 
   // ---------------------------------------------------------------------
 
