@@ -324,35 +324,25 @@ int main(int argc, char *args[])
 
   // ---------------------------------------------------------------------
 
-  // struct rusage workerren_usage, self_usage;
-  //
-  // // getrusage(RUSAGE_CHILDREN, &workerren_usage);
-  // getrusage(RUSAGE_SELF, &self_usage);
-  // fprintf(
-  //   stderr,
-  //   "Total time spent by all children in user mode = %f ms\n",
-  //   workerren_usage.ru_utime.tv_usec / 1000000.0 +
-  //   workerren_usage.ru_utime.tv_sec * 1000.0);
-  // fprintf(
-  //   stderr,
-  //   "Total time spent by all children in system mode = %f ms\n",
-  //   workerren_usage.ru_stime.tv_usec / 1000000.0 +
-  //   workerren_usage.ru_stime.tv_sec * 1000.0);
-  // fprintf(
-  //   stderr,
-  //   "Total time spent by the parent in user mode = %f ms\n",
-  //   self_usage.ru_utime.tv_usec / 1000000.0 + self_usage.ru_utime.tv_sec *
-  //   1000.0);
-  // fprintf(
-  //   stderr,
-  //   "Total time spent by the parent in system mode = %f ms\n",
-  //   self_usage.ru_stime.tv_usec / 1000000.0 + self_usage.ru_stime.tv_sec *
-  //   1000.0);
-  //
+  struct rusage proc_thread_usage;
+
+  getrusage(RUSAGE_SELF, &proc_thread_usage);
+
+  fprintf(
+    stderr,
+    "Total time spent by the process and its thread in user mode = %f ms\n",
+    proc_thread_usage.ru_utime.tv_usec / 1000000.0 + proc_thread_usage.ru_utime.tv_sec *
+    1000.0);
+  fprintf(
+    stderr,
+    "Total time spent by the process and its thread in system mode = %f ms\n",
+    proc_thread_usage.ru_stime.tv_usec / 1000000.0 + proc_thread_usage.ru_stime.tv_sec *
+    1000.0);
+  
   // Get end time.
   clock_gettime(CLOCK_MONOTONIC,
                 &endTime);
-  //
+
   // Calculate and display the total elapsed time.
   double totalElapsedTime =
     (endTime.tv_nsec - startTime.tv_nsec) / 1000000.0 +
