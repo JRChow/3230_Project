@@ -215,7 +215,8 @@ void* work(void *arg) {
   // **************************** Consumer ****************************
   fprintf(stderr, "start working!\n");
 
-  while (1) {                              // TODO: While not terminated
+  while (1) { // TODO: While not terminated
+    fprintf(stderr, "new iter!\n");
     Pthread_mutex_lock(&poolLock);
 
     while (taskCount == 0) {               // While task pool is empty
